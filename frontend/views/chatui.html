@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcomIQ Intelligence — Operational AI Chat</title>
+  <meta name="description"
+    content="Ask anything about your e-commerce operations. EcomIQ streams real-time Kafka → Spark → PostgreSQL insights through a conversational AI interface." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Lenis smooth scroll -->
+  <link rel="stylesheet" href="https://unpkg.com/lenis@1.3.23/dist/lenis.css">
+
+  <!-- Marked for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* ─── Design Tokens (mirrors landing page) ─── */
+    :root {
+      --void: #05070B;
+      --panel: #0B0F17;
+      --panel-2: #0E1420;
+      --line: rgba(231, 236, 243, 0.09);
+      --ink: #E7ECF3;
+      --ink-dim: #8993A6;
+      --ink-faint: #4E5666;
+      --cyan: #4FD8E8;
+      --violet: #8B7CF6;
+      --amber: #F5A623;
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--void);
+    }
+
+    body {
+      background: var(--void);
+      color: var(--ink);
+      font-family: var(--font-body);
+      overflow: hidden;
+      height: 100svh;
+      cursor: none;
+    }
+
+    @media (max-width:900px),
+    (hover:none) {
+      body {
+        cursor: auto;
+      }
+
+      .cursor-glow,
+      .cursor-dot {
+        display: none !important;
+      }
+    }
+
+    ::selection {
+      background: var(--cyan);
+      color: var(--void);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 3px;
+      border-radius: 3px;
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* ─── Fixed background canvases ─── */
+    #mesh-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.035;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ─── Cursor ─── */
+    .cursor-glow {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 360px;
+      height: 360px;
+      margin: -180px 0 0 -180px;
+      border-radius: 50%;
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(circle, rgba(79, 216, 232, 0.10) 0%, rgba(139, 124, 246, 0.05) 45%, transparent 72%);
+      will-change: transform;
+    }
+
+    .cursor-dot {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 7px;
+      height: 7px;
+      margin: -3.5px 0 0 -3.5px;
+      border-radius: 50%;
+      background: var(--cyan);
+      z-index: 3;
+      pointer-events: none;
+      box-shadow: 0 0 10px 2px rgba(79, 216, 232, 0.7);
+      will-change: transform;
+    }
+
+    /* ─── SVG liquid filter ─── */
+    svg.filters {
+      position: absolute;
+      width: 0;
+      height: 0;
+    }
+
+    /* ─── App shell ─── */
+    #app {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      height: 100svh;
+      overflow: hidden;
+    }
+
+    /* ─── Glass mixin ─── */
+    .glass {
+      position: relative;
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.6);
+      isolation: isolate;
+    }
+
+    .glass::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 40%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      width: 270px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, rgba(11, 15, 23, 0.96), rgba(5, 7, 11, 0.98));
+      border-right: 1px solid var(--line);
+      padding: 22px 16px;
+      gap: 10px;
+      z-index: 10;
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 8px 22px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 4px;
+    }
+
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px rgba(79, 216, 232, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+    }
+
+    .logo-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-top: 2px;
+    }
+
+    /* Back link */
+    .back-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.71rem;
+      letter-spacing: 0.04em;
+      color: var(--ink-dim);
+      padding: 9px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.25s;
+      cursor: pointer;
+    }
+
+    .back-link:hover {
+      color: var(--ink);
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* New Investigation button */
+    .new-chat-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      padding: 12px 16px;
+      border-radius: 11px;
+      background: var(--ink);
+      color: var(--void);
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s;
+      margin-top: 4px;
+    }
+
+    .new-chat-btn:hover {
+      opacity: 0.88;
+      transform: translateY(-1px);
+    }
+
+    /* Sidebar label */
+    .sidebar-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      padding: 4px 6px;
+    }
+
+    /* History items */
+    .history-item {
+      padding: 9px 12px;
+      border-radius: 9px;
+      font-size: 0.8rem;
+      color: var(--ink-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border: 1px solid transparent;
+    }
+
+    .history-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+
+    .history-item.active {
+      background: rgba(79, 216, 232, 0.08);
+      border-color: rgba(79, 216, 232, 0.25);
+      color: var(--cyan);
+    }
+
+    /* ─── Main area ─── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* Topbar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      background: linear-gradient(180deg, rgba(5, 7, 11, 0.92) 0%, transparent 100%);
+      border-bottom: 1px solid var(--line);
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .topbar-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+    }
+
+    .topbar-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px rgba(79, 216, 232, 0.9);
+    }
+
+    /* ─── Messages area ─── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 48px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      scroll-behavior: smooth;
+    }
+
+    .messages::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+    }
+
+    /* ─── Welcome screen ─── */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 28px;
+      padding: 60px 40px;
+      animation: welcomeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes welcomeIn {
+      from {
+        opacity: 0;
+        transform: translateY(22px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .welcome-orb {
+      width: 88px;
+      height: 88px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, rgba(79, 216, 232, 0.2), rgba(139, 124, 246, 0.2));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 0 50px rgba(79, 216, 232, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      animation: orbFloat 5s ease-in-out infinite;
+    }
+
+    .welcome-orb canvas {
+      border-radius: 22px;
+    }
+
+    @keyframes orbFloat {
+
+      0%,
+      100% {
+        transform: translateY(0);
+        box-shadow: 0 0 50px rgba(79, 216, 232, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      }
+
+      50% {
+        transform: translateY(-10px);
+        box-shadow: 0 14px 60px rgba(79, 216, 232, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      }
+    }
+
+    .welcome h1 {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 700;
+      line-height: 1.1;
+      background: linear-gradient(95deg, var(--ink), var(--cyan));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .welcome-sub {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Quick chips — pill style matching reference UI */
+    .quick-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      max-width: 720px;
+      margin-top: 8px;
+    }
+
+    /* Reset button defaults for chip */
+    button.chip {
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .chip {
+      padding: 11px 22px;
+      border-radius: 100px;
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      font-weight: 400;
+      line-height: 1.4;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(20px) saturate(120%);
+      -webkit-backdrop-filter: blur(20px) saturate(120%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--ink);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 16px rgba(0, 0, 0, 0.25);
+      white-space: nowrap;
+      -webkit-user-select: none;
+      user-select: none;
+      text-align: center;
+    }
+
+    .chip:hover {
+      background: rgba(79, 216, 232, 0.10);
+      border-color: rgba(79, 216, 232, 0.40);
+      color: var(--cyan);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 0 20px rgba(79, 216, 232, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .chip:active {
+      transform: translateY(0) scale(0.97);
+    }
+
+    /* ─── Message rows ─── */
+    .msg-row {
+      display: flex;
+      gap: 16px;
+      animation: msgIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
+    }
+
+    @keyframes msgIn {
+      from {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .msg-row.user {
+      flex-direction: row-reverse;
+    }
+
+    /* Avatar */
+    .msg-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-family: var(--font-mono);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .msg-avatar.ai-av {
+      background: linear-gradient(135deg, rgba(79, 216, 232, 0.25), rgba(139, 124, 246, 0.25));
+      box-shadow: 0 0 14px rgba(79, 216, 232, 0.3);
+      color: var(--cyan);
+    }
+
+    .msg-avatar.user-av {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink-dim);
+    }
+
+    /* User bubble */
+    .user-bubble {
+      max-width: 62%;
+      padding: 13px 20px;
+      border-radius: 20px 6px 20px 20px;
+      background: linear-gradient(135deg, rgba(79, 216, 232, 0.1), rgba(139, 124, 246, 0.1));
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(79, 216, 232, 0.2);
+      font-size: 0.92rem;
+      line-height: 1.6;
+      color: var(--ink);
+      box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    /* AI card */
+    .ai-card {
+      flex: 1;
+      max-width: calc(100% - 50px);
+      background: rgba(11, 15, 23, 0.6);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border: 1px solid var(--line);
+      border-radius: 6px 20px 20px 20px;
+      overflow: hidden;
+      box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.07), 0 18px 40px rgba(0, 0, 0, 0.4);
+      transition: transform 0.3s ease;
+    }
+
+    .ai-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .ai-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 22px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .ai-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--cyan);
+    }
+
+    .ai-label-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px rgba(79, 216, 232, 0.9);
+    }
+
+    .scope-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .scope-chip {
+      padding: 3px 10px;
+      border-radius: 18px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      background: rgba(139, 124, 246, 0.1);
+      border: 1px solid rgba(139, 124, 246, 0.25);
+      color: var(--violet);
+    }
+
+    .scope-chip .sc-key {
+      color: var(--ink-faint);
+      margin-right: 3px;
+    }
+
+    .ai-body {
+      padding: 22px 26px;
+      font-size: 0.9rem;
+      line-height: 1.75;
+      color: var(--ink-dim);
+    }
+
+    /* Markdown */
+    .ai-body h2 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 20px 0 10px;
+      color: var(--ink);
+    }
+
+    .ai-body h2:first-child {
+      margin-top: 0;
+    }
+
+    .ai-body p {
+      margin: 8px 0;
+    }
+
+    .ai-body ul {
+      padding-left: 18px;
+      margin: 10px 0;
+    }
+
+    .ai-body li {
+      margin: 5px 0;
+    }
+
+    .ai-body li::marker {
+      color: var(--cyan);
+    }
+
+    .ai-body strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .ai-body code {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 2px 6px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--violet);
+    }
+
+    .ai-body pre {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      margin: 14px 0;
+      overflow-x: auto;
+    }
+
+    .ai-body pre code {
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    .ai-body hr {
+      border: none;
+      border-top: 1px solid var(--line);
+      margin: 18px 0;
+    }
+
+    /* ─── Typing indicator ─── */
+    .typing-card {
+      padding: 18px 22px;
+    }
+
+    .typing-header {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--ink-faint);
+      margin-bottom: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .typing-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      animation: typeBounce 1.4s infinite ease-in-out both;
+    }
+
+    .typing-dot:nth-child(1) {
+      background: var(--cyan);
+      animation-delay: -0.32s;
+    }
+
+    .typing-dot:nth-child(2) {
+      background: var(--violet);
+      animation-delay: -0.16s;
+    }
+
+    .typing-dot:nth-child(3) {
+      background: var(--amber);
+    }
+
+    @keyframes typeBounce {
+
+      0%,
+      80%,
+      100% {
+        transform: scale(0);
+        opacity: 0.5;
+      }
+
+      40% {
+        transform: scale(1);
+        opacity: 1;
+        box-shadow: 0 0 8px currentColor;
+      }
+    }
+
+    .typing-steps {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .typing-step {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--ink-faint);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: color 0.3s;
+    }
+
+    .typing-step.active {
+      color: var(--cyan);
+    }
+
+    .typing-step.done {
+      color: var(--amber);
+    }
+
+    .step-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* ─── Error message ─── */
+    .error-bubble {
+      padding: 14px 20px;
+      border-radius: 12px;
+      background: rgba(245, 166, 35, 0.08);
+      border: 1px solid rgba(245, 166, 35, 0.25);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--amber);
+    }
+
+    /* ─── Input area ─── */
+    .input-area {
+      padding: 18px 32px 22px;
+      flex-shrink: 0;
+      background: linear-gradient(0deg, rgba(5, 7, 11, 0.95) 60%, transparent 100%);
+      border-top: 1px solid var(--line);
+    }
+
+    .input-wrapper {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      padding: 10px 14px 10px 22px;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.4);
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .input-wrapper:focus-within {
+      border-color: rgba(79, 216, 232, 0.35);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 20px rgba(79, 216, 232, 0.12), 0 8px 32px rgba(0, 0, 0, 0.4);
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    #queryInput {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      resize: none;
+      max-height: 140px;
+      min-height: 24px;
+      padding: 6px 0;
+    }
+
+    #queryInput::placeholder {
+      color: var(--ink-faint);
+    }
+
+    .send-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+      color: var(--void);
+      font-weight: 700;
+      transition: all 0.2s;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 14px rgba(79, 216, 232, 0.35);
+    }
+
+    .send-btn:hover:not(:disabled) {
+      transform: scale(1.08);
+      box-shadow: 0 0 22px rgba(79, 216, 232, 0.5);
+    }
+
+    .send-btn:active:not(:disabled) {
+      transform: scale(0.94);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+      box-shadow: none;
+      background: var(--ink-faint);
+    }
+
+    .input-hint {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      color: var(--ink-faint);
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- SVG liquid filter -->
+  <svg class="filters" aria-hidden="true">
+    <filter id="liquid-distort">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+
+  <!-- Animated gradient mesh background -->
+  <canvas id="mesh-canvas" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Animated cursor -->
+  <div class="cursor-glow" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
+
+  <div id="app">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">✦</div>
+        <div>
+          <div class="logo-text">EcomIQ</div>
+          <div class="logo-sub">Intelligence</div>
+        </div>
+      </div>
+
+      <a class="back-link" href="index.html" id="back-home-btn">← Back to Overview</a>
+
+
+      <button class="new-chat-btn" id="newChatBtn" onclick="newChat()">
+        ✦ New Investigation
+      </button>
+
+      <div class="sidebar-label">Recent</div>
+      <div id="historyList"></div>
+    </aside>
+
+    <!-- ── Main Content ── -->
+    <main class="main">
+
+      <!-- Topbar -->
+      <div class="topbar">
+        <div class="topbar-title">Operational Intelligence</div>
+        <div class="topbar-badge">
+          <div class="topbar-dot"></div>
+          <span>EcomIQ AI · Live Pipeline</span>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="messages" id="messages">
+        <!-- Welcome screen -->
+        <div class="welcome" id="welcome">
+          <div class="welcome-orb" id="orb-container">
+            <canvas id="orb-canvas" width="88" height="88" aria-hidden="true"></canvas>
+          </div>
+          <div>
+            <h1>EcomIQ Intelligence</h1>
+            <div class="welcome-sub">Real-time · Kafka → Spark → PostgreSQL</div>
+          </div>
+          <div class="quick-chips" id="quick-chips">
+            <button class="chip" id="chip-payments" onclick="handleChipClick('Why are payments failing?')">⚡ Why are
+              payments failing?</button>
+            <button class="chip" id="chip-courier"
+              onclick="handleChipClick('Which courier has the best performance?')">🚚 Which courier has the best
+              performance?</button>
+            <button class="chip" id="chip-returns" onclick="handleChipClick('Which SKUs have the most returns?')">📦
+              Which SKUs have the most returns?</button>
+            <button class="chip" id="chip-anomalies"
+              onclick="handleChipClick('Are there any operational anomalies?')">📉 Are there any operational
+              anomalies?</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input area -->
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="queryInput" placeholder="Ask anything about your operations…" rows="1"
+            aria-label="Query input"></textarea>
+          <button class="send-btn" id="sendBtn" title="Send query" aria-label="Send">➤</button>
+        </div>
+        <div class="input-hint">⌘ Enter to send · Shift+Enter for new line</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Libraries ── -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.3.23/dist/lenis.min.js"></script>
+
+  <!-- ── Animated gradient mesh ── -->
+  <script>
+    (function () {
+      const meshCanvas = document.getElementById('mesh-canvas');
+      const ctx = meshCanvas.getContext('2d');
+      let w, h;
+      function resize() {
+        w = meshCanvas.width = window.innerWidth;
+        h = meshCanvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      const blobs = [
+        { x: 0.15, y: 0.15, r: 520, c: '76,216,232', dx: 0.00011, dy: 0.00009, t: 0 },
+        { x: 0.85, y: 0.25, r: 480, c: '139,124,246', dx: -0.00009, dy: 0.00012, t: 1.3 },
+        { x: 0.30, y: 0.70, r: 440, c: '139,124,246', dx: 0.00013, dy: -0.00008, t: 2.6 },
+        { x: 0.75, y: 0.75, r: 560, c: '76,216,232', dx: -0.0001, dy: -0.00011, t: 4.1 },
+        { x: 0.50, y: 0.50, r: 400, c: '245,166,35', dx: 0.00008, dy: 0.00007, t: 5.5 },
+      ];
+
+      function draw(time) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#05070B';
+        ctx.fillRect(0, 0, w, h);
+        blobs.forEach(b => {
+          const bx = (b.x + Math.sin(time * b.dx + b.t) * 0.07) * w;
+          const by = (b.y + Math.cos(time * b.dy + b.t) * 0.06) * h;
+          const g = ctx.createRadialGradient(bx, by, 0, bx, by, b.r);
+          g.addColorStop(0, `rgba(${b.c},0.15)`);
+          g.addColorStop(1, `rgba(${b.c},0)`);
+          ctx.fillStyle = g;
+          ctx.fillRect(bx - b.r, by - b.r, b.r * 2, b.r * 2);
+        });
+        requestAnimationFrame(t => draw(t * 0.001));
+      }
+      requestAnimationFrame(t => draw(t * 0.001));
+    })();
+  </script>
+
+  <!-- ── Cursor glow ── -->
+  <script>
+    (function () {
+      if (!matchMedia('(hover:hover)').matches) return;
+      const glow = document.querySelector('.cursor-glow');
+      const dot = document.querySelector('.cursor-dot');
+      const glowX = gsap.quickTo(glow, 'x', { duration: 0.55, ease: 'power3.out' });
+      const glowY = gsap.quickTo(glow, 'y', { duration: 0.55, ease: 'power3.out' });
+      const dotX = gsap.quickTo(dot, 'x', { duration: 0.10, ease: 'power3.out' });
+      const dotY = gsap.quickTo(dot, 'y', { duration: 0.10, ease: 'power3.out' });
+      window.addEventListener('pointermove', e => {
+        glowX(e.clientX); glowY(e.clientY);
+        dotX(e.clientX); dotY(e.clientY);
+      });
+    })();
+  </script>
+
+  <!-- ── Mini Three.js orb in welcome screen ── -->
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+    (function () {
+      const canvas = document.getElementById('orb-canvas');
+      if (!canvas) return;
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(88, 88);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+      camera.position.set(0, 0, 3.2);
+      const geo = new THREE.IcosahedronGeometry(1, 1);
+      scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x4fd8e8, wireframe: true, transparent: true, opacity: 0.6 })));
+      scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x8b7cf6, size: 0.06, transparent: true, opacity: 0.9 })));
+      const inner = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), new THREE.MeshBasicMaterial({ color: 0xf5a623, wireframe: true, transparent: true, opacity: 0.4 }));
+      scene.add(inner);
+      let tRX = 0, tRY = 0;
+      window.addEventListener('pointermove', e => {
+        tRX = (e.clientY / innerHeight - 0.5) * 0.5;
+        tRY = (e.clientX / innerWidth - 0.5) * 0.7;
+      });
+      (function loop() {
+        scene.children[0].rotation.y += 0.008;
+        scene.children[0].rotation.x += 0.004;
+        scene.children[1].rotation.y += 0.008;
+        scene.children[1].rotation.x += 0.004;
+        inner.rotation.y -= 0.012;
+        inner.rotation.x -= 0.006;
+        camera.position.x += (tRY * 1.5 - camera.position.x) * 0.04;
+        camera.position.y += (-tRX * 1.5 - camera.position.y) * 0.04;
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+        requestAnimationFrame(loop);
+      })();
+    })();
+  </script>
+
+  <!-- ── Glass card hover tilt ── -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      function attachTilt(selector) {
+        document.querySelectorAll(selector).forEach(card => {
+          const tx = gsap.quickTo(card, 'rotateX', { duration: 0.45, ease: 'power3.out' });
+          const ty = gsap.quickTo(card, 'rotateY', { duration: 0.45, ease: 'power3.out' });
+          card.style.transformPerspective = '800px';
+          card.addEventListener('pointermove', e => {
+            const r = card.getBoundingClientRect();
+            const px = (e.clientX - r.left) / r.width - 0.5;
+            const py = (e.clientY - r.top) / r.height - 0.5;
+            ty(px * 5); tx(-py * 5);
+          });
+          card.addEventListener('pointerleave', () => { tx(0); ty(0); });
+        });
+      }
+      // Initial attach; will be called again when new messages arrive
+      window._attachTilt = attachTilt;
+      attachTilt('.ai-card');
+      attachTilt('.chip');
+    });
+  </script>
+
+  <!-- ── App JS (api / ui / app logic inlined for single-file portability while keeping modular JS files) ── -->
+  <script src="../js/api.js"></script>
+  <script src="../js/ui.js"></script>
+  <script src="../js/app.js"></script>
+
+  <!-- ── Override UI helpers to match new theme ── -->
+  <script>
+    // Augment after existing scripts load — re-patch appendAIResponse to attach tilt
+    (function patchUI() {
+      const _orig = window.appendAIResponse;
+      if (typeof _orig === 'function') {
+        window.appendAIResponse = function (data) {
+          _orig(data);
+          if (window._attachTilt) window._attachTilt('.ai-card');
+        };
+      }
+    })();
+
+    // Global chip click handler — clean query text
+    window.handleChipClick = function (query) {
+      if (window.sendQuery) window.sendQuery(query);
+    };
+
+    // Entrance animations via GSAP
+    document.addEventListener('DOMContentLoaded', () => {
+      gsap.from('.sidebar', { x: -30, opacity: 0, duration: 0.7, ease: 'power3.out', delay: 0.1 });
+      gsap.from('.topbar', { y: -20, opacity: 0, duration: 0.6, ease: 'power3.out', delay: 0.2 });
+      gsap.from('.input-area', { y: 30, opacity: 0, duration: 0.65, ease: 'power3.out', delay: 0.3 });
+      gsap.from('.welcome-orb', { scale: 0.7, opacity: 0, duration: 0.9, ease: 'back.out(1.7)', delay: 0.45 });
+      gsap.from('.welcome h1', { y: 20, opacity: 0, duration: 0.7, ease: 'power3.out', delay: 0.55 });
+      gsap.from('.welcome-sub', { y: 15, opacity: 0, duration: 0.6, ease: 'power3.out', delay: 0.65 });
+      // Chips — set visible first so they always show even if animation is skipped
+      gsap.fromTo('.chip',
+        { y: 16, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out', stagger: 0.08, delay: 0.78, clearProps: 'transform' }
+      );
+
+      // New chat btn micro-anim
+      const btn = document.getElementById('newChatBtn');
+      if (btn) {
+        btn.addEventListener('pointerenter', () => gsap.to(btn, { scale: 1.03, duration: 0.2 }));
+        btn.addEventListener('pointerleave', () => gsap.to(btn, { scale: 1, duration: 0.25 }));
+      }
+
+      // Send btn pulse on hover
+      const sendBtn = document.getElementById('sendBtn');
+      if (sendBtn) {
+        sendBtn.addEventListener('pointerenter', () => gsap.to(sendBtn, { scale: 1.1, duration: 0.18 }));
+        sendBtn.addEventListener('pointerleave', () => gsap.to(sendBtn, { scale: 1, duration: 0.22 }));
+      }
+    });
+  </script>
+
+</body>
+
+</html>

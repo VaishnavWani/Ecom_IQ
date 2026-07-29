@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcomIQ — Real-Time Operational Intelligence for E-Commerce</title>
+  <meta name="description"
+    content="A real-time Kafka → Spark → PostgreSQL pipeline that closes the gap between when an operational failure starts and when someone notices." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Lenis smooth scroll -->
+  <link rel="stylesheet" href="https://unpkg.com/lenis@1.3.23/dist/lenis.css">
+
+  <style>
+    :root {
+      --void: #05070B;
+      --panel: #0B0F17;
+      --panel-2: #0E1420;
+      --line: rgba(231, 236, 243, 0.09);
+      --ink: #E7ECF3;
+      --ink-dim: #8993A6;
+      --ink-faint: #4E5666;
+      --cyan: #4FD8E8;
+      --violet: #8B7CF6;
+      --amber: #F5A623;
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--void);
+    }
+
+    body {
+      background: var(--void);
+      color: var(--ink);
+      font-family: var(--font-body);
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    @media (max-width:900px),
+    (hover:none) {
+      body {
+        cursor: auto;
+      }
+
+      .cursor-glow,
+      .cursor-dot {
+        display: none !important;
+      }
+    }
+
+    ::selection {
+      background: var(--cyan);
+      color: var(--void);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 3px;
+      border-radius: 3px;
+    }
+
+    /* ---------- Backgrounds ---------- */
+    #mesh-canvas,
+    #particle-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    #particle-canvas {
+      z-index: 1;
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.035;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ---------- Cursor ---------- */
+    .cursor-glow {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 420px;
+      height: 420px;
+      margin: -210px 0 0 -210px;
+      border-radius: 50%;
+      z-index: 3;
+      pointer-events: none;
+      background: radial-gradient(circle, rgba(79, 216, 232, 0.10) 0%, rgba(139, 124, 246, 0.05) 45%, transparent 72%);
+      will-change: transform;
+    }
+
+    .cursor-dot {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      margin: -4px 0 0 -4px;
+      border-radius: 50%;
+      background: var(--cyan);
+      z-index: 4;
+      pointer-events: none;
+      box-shadow: 0 0 12px 2px rgba(79, 216, 232, 0.7);
+      will-change: transform;
+    }
+
+    /* ---------- Layout shell ---------- */
+    main {
+      position: relative;
+      z-index: 5;
+    }
+
+    section {
+      position: relative;
+      padding: min(14vw, 150px) 6vw;
+    }
+
+    .section-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow::before {
+      content: '';
+      width: 22px;
+      height: 1px;
+      background: var(--cyan);
+      display: inline-block;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    h2 {
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      line-height: 1.08;
+      color: var(--ink);
+    }
+
+    h3 {
+      font-size: 1.3rem;
+    }
+
+    .lede {
+      font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+      color: var(--ink-dim);
+      line-height: 1.6;
+      max-width: 640px;
+      margin-top: 20px;
+    }
+
+    /* ---------- Nav ---------- */
+    header.nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 6vw;
+      opacity: 0;
+    }
+
+    .brand {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px 2px rgba(79, 216, 232, 0.8);
+    }
+
+    nav.links {
+      display: flex;
+      gap: 34px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+    }
+
+    nav.links a {
+      color: var(--ink-dim);
+      transition: color .3s;
+      position: relative;
+    }
+
+    nav.links a:hover {
+      color: var(--ink);
+    }
+
+    @media (max-width:760px) {
+      nav.links {
+        display: none;
+      }
+    }
+
+    /* ---------- Glass ---------- */
+    .glass {
+      position: relative;
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.6);
+      isolation: isolate;
+    }
+
+    .glass::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 40%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .glass.liquid {
+      filter: url(#liquid-distort);
+    }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding-top: 120px;
+      overflow: hidden;
+    }
+
+    #hero-canvas {
+      position: absolute;
+      top: 0;
+      right: -6%;
+      width: 60%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 760px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.6rem, 6.4vw, 5.1rem);
+      line-height: 1.02;
+      color: var(--ink);
+    }
+
+    .hero h1 .accent {
+      background: linear-gradient(95deg, var(--cyan), var(--violet));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-sub {
+      margin-top: 26px;
+      font-size: clamp(1.05rem, 1.7vw, 1.28rem);
+      color: var(--ink-dim);
+      max-width: 560px;
+      line-height: 1.65;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 48px;
+      margin-top: 56px;
+      flex-wrap: wrap;
+    }
+
+    .stat .num {
+      font-family: var(--font-mono);
+      font-size: 1.9rem;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .stat .num span {
+      color: var(--cyan);
+    }
+
+    .stat .label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    .cta-row {
+      display: flex;
+      gap: 16px;
+      margin-top: 52px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+      padding: 15px 26px;
+      border-radius: 11px;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn.primary {
+      background: var(--ink);
+      color: var(--void);
+      border: none;
+      font-weight: 600;
+    }
+
+    .btn.ghost {
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .scroll-cue {
+      position: absolute;
+      bottom: 38px;
+      left: 6vw;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--ink-faint);
+      letter-spacing: 0.12em;
+      z-index: 2;
+    }
+
+    .scroll-cue .line {
+      width: 1px;
+      height: 38px;
+      background: linear-gradient(var(--cyan), transparent);
+    }
+
+    /* ---------- The Gap (signature convergence section) ---------- */
+    .gap-section {
+      min-height: 220vh;
+      padding: 0;
+    }
+
+    .gap-pin {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 0 6vw;
+      position: relative;
+    }
+
+    .gap-copy {
+      position: relative;
+      z-index: 3;
+      max-width: 520px;
+    }
+
+    .gap-copy .eyebrow {
+      color: var(--amber);
+    }
+
+    .gap-copy .eyebrow::before {
+      background: var(--amber);
+    }
+
+    .gap-label {
+      position: absolute;
+      z-index: 3;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--ink-faint);
+      letter-spacing: 0.08em;
+      opacity: 0;
+    }
+
+    .gap-label.before {
+      bottom: 14%;
+      left: 6vw;
+    }
+
+    .gap-label.after {
+      bottom: 14%;
+      right: 6vw;
+      text-align: right;
+    }
+
+    /* ---------- Architecture (pinned flow) ---------- */
+    .arch-section {
+      min-height: 280vh;
+      padding: 0;
+      background: var(--panel);
+    }
+
+    .arch-pin {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 6vw;
+      overflow: hidden;
+    }
+
+    .arch-head {
+      max-width: 640px;
+      margin-bottom: 56px;
+    }
+
+    .arch-track {
+      position: relative;
+    }
+
+    .arch-nodes {
+      display: flex;
+      gap: 26px;
+    }
+
+    .arch-node {
+      flex: 0 0 260px;
+      padding: 28px 24px;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .arch-node .idx {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--cyan);
+    }
+
+    .arch-node h3 {
+      margin-top: 14px;
+      color: var(--ink);
+      font-size: 1.15rem;
+    }
+
+    .arch-node p {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--ink-dim);
+      line-height: 1.55;
+      margin-top: 10px;
+    }
+
+    .arch-node .tag {
+      align-self: flex-start;
+      margin-top: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      color: var(--ink-faint);
+      border: 1px solid var(--line);
+      padding: 4px 9px;
+      border-radius: 6px;
+    }
+
+    .lottie-sync {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* ---------- Schema grid ---------- */
+    .schema-section {
+      padding-top: min(14vw, 150px);
+    }
+
+    .schema-head {
+      max-width: 640px;
+    }
+
+    .schema-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 56px;
+    }
+
+    .schema-card {
+      padding: 20px 18px;
+      min-height: 108px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform .25s ease;
+    }
+
+    .schema-card .type {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .schema-card.dim .type {
+      color: var(--violet);
+    }
+
+    .schema-card.fact .type {
+      color: var(--cyan);
+    }
+
+    .schema-card .name {
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      color: var(--ink);
+      margin-top: 14px;
+      word-break: break-word;
+    }
+
+    .schema-legend {
+      display: flex;
+      gap: 28px;
+      margin-top: 26px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+    }
+
+    .schema-legend .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .schema-legend .dot.dim {
+      background: var(--violet);
+    }
+
+    .schema-legend .dot.fact {
+      background: var(--cyan);
+    }
+
+    /* ---------- Case study ---------- */
+    .case-section {
+      background: var(--panel);
+    }
+
+    .case-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-top: 56px;
+    }
+
+    @media (max-width:860px) {
+      .case-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .case-card {
+      padding: 34px;
+    }
+
+    .case-card .kicker {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .case-card.before .kicker {
+      color: var(--amber);
+    }
+
+    .case-card.after .kicker {
+      color: var(--cyan);
+    }
+
+    .case-card h3 {
+      margin-top: 14px;
+    }
+
+    .case-steps {
+      margin-top: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .case-step {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .case-step .n {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--ink-faint);
+      flex: 0 0 22px;
+      padding-top: 2px;
+    }
+
+    .case-step p {
+      font-size: 0.92rem;
+      color: var(--ink-dim);
+      line-height: 1.55;
+    }
+
+    .case-note {
+      margin-top: 24px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--ink-faint);
+      line-height: 1.6;
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+    }
+
+    .case-metric {
+      font-family: var(--font-mono);
+      font-size: 2.1rem;
+      color: var(--ink);
+      margin-top: 20px;
+    }
+
+    .case-metric span {
+      color: var(--amber);
+    }
+
+    .case-card.after .case-metric span {
+      color: var(--cyan);
+    }
+
+    /* ---------- Users ---------- */
+    .users-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 56px;
+    }
+
+    @media (max-width:900px) {
+      .users-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .user-card {
+      padding: 32px 26px;
+    }
+
+    .user-card .idx {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--violet);
+    }
+
+    .user-card h3 {
+      margin-top: 16px;
+    }
+
+    .user-card p {
+      margin-top: 12px;
+      font-size: 0.92rem;
+      color: var(--ink-dim);
+      line-height: 1.6;
+    }
+
+    /* ---------- Stack ---------- */
+    .stack-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 44px;
+    }
+
+    .chip {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      padding: 10px 16px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* ---------- Footer ---------- */
+    footer {
+      padding: 80px 6vw 50px;
+      text-align: center;
+    }
+
+    footer .brand {
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+
+    footer p {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--ink-faint);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- SVG filter: real liquid-glass displacement, self-contained (no external liquidGL dependency) -->
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="liquid-distort">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+
+  <div class="grain" aria-hidden="true"></div>
+  <canvas id="mesh-canvas" aria-hidden="true"></canvas>
+  <canvas id="particle-canvas" aria-hidden="true"></canvas>
+  <div class="cursor-glow" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
+
+  <header class="nav">
+    <div class="brand"><span class="brand-mark"></span>EcomIQ</div>
+    <nav class="links">
+      <a href="#architecture">Architecture</a>
+      <a href="#schema">Schema</a>
+      <a href="#case-study">Case Study</a>
+      <a href="#users">Who It's For</a>
+      <a href="chatui.html" style="color:var(--cyan);font-weight:600;">Launch Intelligence →</a>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- HERO -->
+    <section class="hero">
+      <canvas id="hero-canvas" aria-hidden="true"></canvas>
+      <div class="section-inner hero-content">
+        <div class="eyebrow reveal">Real-time e-commerce operational intelligence</div>
+        <h1 class="reveal">The failure isn't the cost.<br><span class="accent">The five days before you notice it
+            are.</span></h1>
+        <p class="hero-sub reveal">EcomIQ streams every order, payment, shipment, return, inventory and click event
+          through one unified pipeline — Kafka, Spark Structured Streaming, PostgreSQL — so a root cause that used to
+          take an afternoon of spreadsheet joins takes one query.</p>
+
+        <div class="hero-stats reveal">
+          <div class="stat">
+            <div class="num"><span id="stat-tables">0</span></div>
+            <div class="label">Postgres tables (star schema)</div>
+          </div>
+          <div class="stat">
+            <div class="num"><span id="stat-topics">0</span></div>
+            <div class="label">Kafka topics streamed</div>
+          </div>
+          <div class="stat">
+            <div class="num"><span id="stat-services">0</span></div>
+            <div class="label">Dockerized services</div>
+          </div>
+        </div>
+
+        <div class="cta-row reveal">
+          <a class="btn primary" id="launch-intelligence-btn" href="./frontend/WebPages/chatui.html">Launch Intelligence
+            →</a>
+          <a class="btn ghost" href="#architecture">See the architecture</a>
+          <a class="btn ghost" href="#case-study">Read the case study</a>
+        </div>
+      </div>
+
+      <div class="scroll-cue reveal"><span class="line"></span>SCROLL</div>
+    </section>
+
+    <!-- THE GAP — signature convergence element -->
+    <section class="gap-section" id="gap">
+      <div class="gap-pin">
+        <div class="section-inner gap-copy">
+          <div class="eyebrow">The problem this pipeline exists to solve</div>
+          <h2>Order data. Payment data. Shipment data. Return data. Four systems, zero shared view.</h2>
+          <p class="lede">When a courier starts mishandling a category in one region, or a payment gateway degrades, the
+            evidence is already there — just scattered across systems that were never built to talk to each other.
+            Nobody joins them until someone manually goes looking.</p>
+        </div>
+        <div class="gap-label before">SCATTERED · UNJOINED · MANUAL</div>
+        <div class="gap-label after">ONE STREAM · ONE SCHEMA · ONE QUERY</div>
+      </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="arch-section" id="architecture">
+      <div class="arch-pin">
+        <div class="section-inner arch-head reveal">
+          <div class="eyebrow">What's actually running</div>
+          <h2>Four stages. One continuous stream.</h2>
+          <p class="lede">Not a diagram of an intended design — this is the pipeline as built and dockerized, verified
+            end-to-end.</p>
+        </div>
+        <div class="section-inner arch-track">
+          <div class="arch-nodes" id="arch-nodes">
+
+            <div class="arch-node glass liquid">
+              <div class="idx">01 / INGEST</div>
+              <div>
+                <h3>Kafka + Zookeeper</h3>
+                <p>Python producer seeds 7 dimension topics once, then streams 7 fact-event topics continuously — one
+                  micro-batch pushed per second.</p>
+              </div>
+              <div class="tag">confluentinc/cp-kafka:7.5.0</div>
+            </div>
+
+            <div class="arch-node glass liquid">
+              <div class="idx">02 / PROCESS</div>
+              <div>
+                <h3>Spark Structured Streaming</h3>
+                <p>14 concurrent streams, each parsed against an explicit schema and written via
+                  <code>foreachBatch</code> — Spark has no native streaming JDBC sink, so every micro-batch is flushed
+                  with the standard batch writer.
+                </p>
+              </div>
+              <div class="tag">spark-sql-kafka-0-10 · 3.5.1</div>
+            </div>
+
+            <div class="arch-node glass liquid">
+              <div class="idx">03 / STORE</div>
+              <div>
+                <h3>PostgreSQL — star schema</h3>
+                <p>7 conformed dimensions, 7 fact tables. Region, courier, category and payment status are all queryable
+                  in a single join — no cross-system export required.</p>
+              </div>
+              <div class="tag">Kimball fact constellation</div>
+            </div>
+
+            <div class="arch-node glass liquid">
+              <div class="idx">04 / SERVE</div>
+              <div>
+                <h3>FastAPI</h3>
+                <p>A REST layer over the same Postgres tables — health check plus queryable endpoints, containerized
+                  alongside the rest of the stack, ready for a BI tool on top.</p>
+              </div>
+              <div class="tag">uvicorn · 0.0.0.0:8000</div>
+            </div>
+
+          </div>
+
+          <div class="glass"
+            style="margin-top:34px; padding:16px 22px; display:inline-flex; align-items:center; gap:12px;">
+            <div class="lottie-sync" id="lottie-sync"></div>
+            <span style="font-family:var(--font-mono); font-size:0.76rem; color:var(--ink-dim);">Live pipeline demo —
+              synthetic event generator, not production traffic</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCHEMA -->
+    <section class="schema-section" id="schema">
+      <div class="section-inner">
+        <div class="schema-head reveal">
+          <div class="eyebrow">The data model</div>
+          <h2>14 tables. Every fact table shares its dimensions.</h2>
+          <p class="lede">Order lines, inventory transactions and clickstream events all resolve back through the same
+            SKU and warehouse dimensions — that's what makes a single cross-domain query possible.</p>
+          <div class="schema-legend">
+            <span><span class="dot dim"></span>Dimension</span>
+            <span><span class="dot fact"></span>Fact</span>
+          </div>
+        </div>
+        <div class="schema-grid" id="schema-grid"></div>
+      </div>
+    </section>
+
+    <!-- CASE STUDY -->
+    <section class="case-section" id="case-study">
+      <div class="section-inner">
+        <div class="reveal" style="max-width:640px;">
+          <div class="eyebrow">Modeled scenario, run against the actual schema</div>
+          <h2>Tracing a regional courier failure</h2>
+          <p class="lede">The synthetic dataset that validates this pipeline generates real return and payment-failure
+            signal — 4 couriers (Delhivery, BlueDart, EcomExpress, DTDC), 4 regions, 3 categories, and a built-in ~15%
+            return rate per order line — so this query pattern is provable against live tables, not a mockup.</p>
+        </div>
+
+        <div class="case-grid">
+          <div class="case-card before glass">
+            <div class="kicker">Before — manual cross-system join</div>
+            <h3>3–4 hours, once someone notices</h3>
+            <div class="case-steps">
+              <div class="case-step"><span class="n">01</span>
+                <p>Ops "feels like" returns are up this week — no alert, just a hunch.</p>
+              </div>
+              <div class="case-step"><span class="n">02</span>
+                <p>Analyst exports separate CSVs from the WMS, payment processor and shipment tracker.</p>
+              </div>
+              <div class="case-step"><span class="n">03</span>
+                <p>Manually joins them in a spreadsheet by order ID and timestamp.</p>
+              </div>
+              <div class="case-step"><span class="n">04</span>
+                <p>Root cause — one courier, one category, one region — confirmed after days of continued mishandling.
+                </p>
+              </div>
+            </div>
+            <div class="case-metric"><span>~5 days</span></div>
+            <div class="case-note">Detection lag — every day the courier keeps shipping the same broken way.</div>
+          </div>
+
+          <div class="case-card after glass">
+            <div class="kicker">After — one query against the star schema</div>
+            <h3>Minutes, not days</h3>
+            <div class="case-steps">
+              <div class="case-step"><span class="n">01</span>
+                <p><code>fact_returns</code> joins to <code>fact_order_lines</code> joins to <code>dim_skus</code> —
+                  return reasons broken down by category, live.</p>
+              </div>
+              <div class="case-step"><span class="n">02</span>
+                <p><code>fact_shipments</code> filtered by <code>courier_name</code> and region surfaces the exact
+                  courier/region pairing.</p>
+              </div>
+              <div class="case-step"><span class="n">03</span>
+                <p>Spark's 5-second micro-batch trigger means the anomaly is in Postgres almost as soon as it happens.
+                </p>
+              </div>
+              <div class="case-step"><span class="n">04</span>
+                <p>Ops reroutes that courier for that category the same day the pattern starts.</p>
+              </div>
+            </div>
+            <div class="case-metric"><span>Minutes</span></div>
+            <div class="case-note">Detection lag — bounded by query time, not by someone remembering to look.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USERS -->
+    <section id="users">
+      <div class="section-inner">
+        <div class="reveal" style="max-width:640px;">
+          <div class="eyebrow">Who actually needs this</div>
+          <h2>Three operators, three different blind spots</h2>
+        </div>
+        <div class="users-grid">
+          <div class="user-card glass reveal">
+            <div class="idx">3PL / Warehouse</div>
+            <h3>Which side of the chain broke?</h3>
+            <p>Managing multiple clients' SKUs across regions — need to isolate whether a failure is courier-side,
+              warehouse-side or product-side before pointing fingers.</p>
+          </div>
+          <div class="user-card glass reveal">
+            <div class="idx">D2C, self-fulfilled</div>
+            <h3>Catch it before it compounds</h3>
+            <p>A payment gateway degrading or a fraud spike costs more the longer it runs unnoticed — same event stream,
+              same lag to close.</p>
+          </div>
+          <div class="user-card glass reveal">
+            <div class="idx">Marketplace</div>
+            <h3>Trace it to the responsible party</h3>
+            <p>Root-cause tracing across seller, SKU and region is how you know who to penalize or support — not a guess
+              from aggregate metrics.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STACK -->
+    <section id="stack">
+      <div class="section-inner">
+        <div class="reveal" style="max-width:640px;">
+          <div class="eyebrow">What it's built with</div>
+          <h2>No abstractions between you and the actual containers</h2>
+        </div>
+        <div class="stack-row reveal">
+          <span class="chip">Apache Kafka 7.5.0</span>
+          <span class="chip">Zookeeper</span>
+          <span class="chip">Spark Structured Streaming 3.5.1</span>
+          <span class="chip">PostgreSQL</span>
+          <span class="chip">FastAPI + Uvicorn</span>
+          <span class="chip">Docker Compose</span>
+          <span class="chip">Python producer / generator</span>
+          <span class="chip">JDBC (foreachBatch sink)</span>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="brand"><span class="brand-mark"></span>EcomIQ</div>
+      <p>Real-time operational intelligence, built on the pipeline running above this fold.</p>
+    </footer>
+
+  </main>
+
+  <!-- ============== LIBRARIES ============== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.3.23/dist/lenis.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import { animate, inView, stagger } from "https://cdn.jsdelivr.net/npm/motion@11.13.5/+esm";
+
+    /* ============================================================
+       0. LENIS SMOOTH SCROLL + GSAP SCROLLTRIGGER BRIDGE
+       ============================================================ */
+    gsap.registerPlugin(ScrollTrigger);
+
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let lenis = null;
+
+    if (!prefersReduced) {
+      lenis = new Lenis({ duration: 1.05, smoothWheel: true });
+      lenis.on("scroll", ScrollTrigger.update);
+      gsap.ticker.add((time) => lenis.raf(time * 1000));
+      gsap.ticker.lagSmoothing(0);
+    }
+
+    /* ============================================================
+       1. NAV + HERO ENTRANCE
+       ============================================================ */
+    gsap.to("header.nav", { opacity: 1, duration: 1, delay: 0.3, ease: "power2.out" });
+
+    gsap.to(".hero .reveal", {
+      opacity: 1, y: 0, duration: 1, ease: "power3.out", stagger: 0.09, delay: 0.2
+    });
+
+    /* ============================================================
+       2. GENERIC SCROLL REVEALS
+       ============================================================ */
+    document.querySelectorAll(".reveal").forEach((el) => {
+      if (el.closest(".hero")) return;
+      gsap.to(el, {
+        opacity: 1, y: 0, duration: 0.9, ease: "power3.out",
+        scrollTrigger: { trigger: el, start: "top 85%" }
+      });
+    });
+
+    /* Motion: lightweight hover/tap micro-interactions on buttons + user cards */
+    document.querySelectorAll(".btn").forEach((btn) => {
+      btn.addEventListener("pointerenter", () => animate(btn, { scale: 1.035 }, { duration: 0.25, easing: "ease-out" }));
+      btn.addEventListener("pointerleave", () => animate(btn, { scale: 1 }, { duration: 0.3, easing: "ease-out" }));
+    });
+    document.querySelectorAll(".user-card, .arch-node, .case-card").forEach((card) => {
+      card.addEventListener("pointerenter", () => animate(card, { y: -6 }, { duration: 0.35, easing: [0.22, 1, 0.36, 1] }));
+      card.addEventListener("pointerleave", () => animate(card, { y: 0 }, { duration: 0.4, easing: [0.22, 1, 0.36, 1] }));
+    });
+
+    /* ============================================================
+       3. LIVE STAT COUNTERS (grounded in the real schema)
+       ============================================================ */
+    function countTo(id, target) {
+      const el = document.getElementById(id);
+      const obj = { v: 0 };
+      ScrollTrigger.create({
+        trigger: el, start: "top 90%", once: true,
+        onEnter: () => gsap.to(obj, {
+          v: target, duration: 1.6, ease: "power2.out",
+          onUpdate: () => el.textContent = Math.round(obj.v)
+        })
+      });
+    }
+    countTo("stat-tables", 14);
+    countTo("stat-topics", 14);
+    countTo("stat-services", 5);
+
+    /* ============================================================
+       4. CURSOR GLOW + DOT (perf: gsap quickTo)
+       ============================================================ */
+    if (!prefersReduced && matchMedia("(hover:hover)").matches) {
+      const glow = document.querySelector(".cursor-glow");
+      const dot = document.querySelector(".cursor-dot");
+      const glowX = gsap.quickTo(glow, "x", { duration: 0.6, ease: "power3.out" });
+      const glowY = gsap.quickTo(glow, "y", { duration: 0.6, ease: "power3.out" });
+      const dotX = gsap.quickTo(dot, "x", { duration: 0.12, ease: "power3.out" });
+      const dotY = gsap.quickTo(dot, "y", { duration: 0.12, ease: "power3.out" });
+      window.addEventListener("pointermove", (e) => {
+        glowX(e.clientX); glowY(e.clientY);
+        dotX(e.clientX); dotY(e.clientY);
+      });
+    }
+
+    /* ============================================================
+       5. GLASS CARD PARALLAX / SPOTLIGHT TILT (mouse-driven)
+       ============================================================ */
+    document.querySelectorAll(".glass").forEach((card) => {
+      const tiltX = gsap.quickTo(card, "rotateX", { duration: 0.5, ease: "power3.out" });
+      const tiltY = gsap.quickTo(card, "rotateY", { duration: 0.5, ease: "power3.out" });
+      card.style.transformPerspective = 800;
+      card.addEventListener("pointermove", (e) => {
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width - 0.5;
+        const py = (e.clientY - r.top) / r.height - 0.5;
+        tiltY(px * 6);
+        tiltX(-py * 6);
+      });
+      card.addEventListener("pointerleave", () => { tiltX(0); tiltY(0); });
+    });
+
+    /* ============================================================
+       6. GRADIENT MESH BACKGROUND (animated canvas blobs)
+       ============================================================ */
+    const meshCanvas = document.getElementById("mesh-canvas");
+    const meshCtx = meshCanvas.getContext("2d");
+    let mw, mh;
+    function resizeMesh() {
+      mw = meshCanvas.width = window.innerWidth;
+      mh = meshCanvas.height = window.innerHeight * document.body.scrollHeight / window.innerHeight;
+      mh = meshCanvas.height = document.documentElement.scrollHeight;
+    }
+    resizeMesh();
+    window.addEventListener("resize", resizeMesh);
+
+    const blobs = [
+      { x: 0.15, y: 0.08, r: 620, c: "76,216,232", dx: 0.00011, dy: 0.00009, t: 0 },
+      { x: 0.85, y: 0.22, r: 560, c: "139,124,246", dx: -0.00009, dy: 0.00012, t: 1.3 },
+      { x: 0.25, y: 0.55, r: 500, c: "139,124,246", dx: 0.00013, dy: -0.00008, t: 2.6 },
+      { x: 0.78, y: 0.68, r: 640, c: "76,216,232", dx: -0.00010, dy: -0.00011, t: 4.1 },
+      { x: 0.5, y: 0.9, r: 500, c: "245,166,35", dx: 0.00008, dy: 0.00007, t: 5.5 },
+    ];
+
+    function drawMesh(time) {
+      meshCtx.clearRect(0, 0, mw, mh);
+      meshCtx.fillStyle = "#05070B";
+      meshCtx.fillRect(0, 0, mw, mh);
+      blobs.forEach((b) => {
+        const bx = (b.x + Math.sin(time * b.dx + b.t) * 0.06) * mw;
+        const by = (b.y + Math.cos(time * b.dy + b.t) * 0.05) * mh;
+        const grad = meshCtx.createRadialGradient(bx, by, 0, bx, by, b.r);
+        grad.addColorStop(0, `rgba(${b.c},0.16)`);
+        grad.addColorStop(1, `rgba(${b.c},0)`);
+        meshCtx.fillStyle = grad;
+        meshCtx.fillRect(bx - b.r, by - b.r, b.r * 2, b.r * 2);
+      });
+    }
+
+    function meshLoop(t) {
+      drawMesh(t * 0.001);
+      requestAnimationFrame(meshLoop);
+    }
+    requestAnimationFrame(meshLoop);
+
+    /* ============================================================
+       7. SIGNATURE ELEMENT — PARTICLE CONVERGENCE
+       (scattered "siloed system" dots snap into the 14-node
+       star-schema grid as the user scrolls through "The Gap")
+       ============================================================ */
+    const pCanvas = document.getElementById("particle-canvas");
+    const pCtx = pCanvas.getContext("2d");
+    let pw, ph;
+    function resizeParticles() {
+      pw = pCanvas.width = window.innerWidth;
+      ph = pCanvas.height = window.innerHeight;
+    }
+    resizeParticles();
+    window.addEventListener("resize", resizeParticles);
+
+    const NODE_COUNT = 42;
+    const particles = [];
+    for (let i = 0; i < NODE_COUNT; i++) {
+      particles.push({
+        // scattered start position (random, "siloed")
+        sx: Math.random() * pw,
+        sy: Math.random() * ph,
+        // ordered end position (grid, "unified schema")
+        ex: 0, ey: 0,
+        r: 1.6 + Math.random() * 1.8,
+      });
+    }
+    function layoutGrid() {
+      const cols = 7, rows = 6;
+      const marginX = pw * 0.14, marginY = ph * 0.22;
+      const gw = pw - marginX * 2, gh = ph - marginY * 2;
+      particles.forEach((p, i) => {
+        const col = i % cols, row = Math.floor(i / cols);
+        p.ex = marginX + (col / (cols - 1)) * gw;
+        p.ey = marginY + (row / (rows - 1)) * gh;
+      });
+    }
+    layoutGrid();
+    window.addEventListener("resize", layoutGrid);
+
+    let convergence = 0; // 0 = scattered, 1 = fully converged grid
+    const gapSection = document.getElementById("gap");
+
+    ScrollTrigger.create({
+      trigger: gapSection,
+      start: "top top",
+      end: "bottom bottom",
+      scrub: 0.6,
+      onUpdate: (self) => { convergence = self.progress; }
+    });
+
+    gsap.to(".gap-label", {
+      opacity: 1,
+      scrollTrigger: { trigger: gapSection, start: "top top", end: "top top+=400", scrub: true }
+    });
+
+    function drawParticles() {
+      pCtx.clearRect(0, 0, pw, ph);
+      const rect = gapSection.getBoundingClientRect();
+      const inView = rect.bottom > 0 && rect.top < window.innerHeight;
+      if (!inView) { requestAnimationFrame(drawParticles); return; }
+
+      const ease = convergence * convergence * (3 - 2 * convergence); // smoothstep
+      const nodePositions = [];
+
+      particles.forEach((p) => {
+        const x = p.sx + (p.ex - p.sx) * ease;
+        const y = p.sy + (p.ey - p.sy) * ease;
+        nodePositions.push([x, y]);
+        const cyan = [76, 216, 232], amber = [245, 166, 35];
+        const c = amber.map((v, i) => Math.round(v + (cyan[i] - v) * ease));
+        pCtx.beginPath();
+        pCtx.arc(x, y, p.r + ease * 1.2, 0, Math.PI * 2);
+        pCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${0.35 + ease * 0.5})`;
+        pCtx.fill();
+      });
+
+      // connecting lines only appear as convergence increases (structure forming)
+      if (ease > 0.15) {
+        pCtx.strokeStyle = `rgba(76,216,232,${(ease - 0.15) * 0.22})`;
+        pCtx.lineWidth = 1;
+        for (let i = 0; i < nodePositions.length; i++) {
+          for (let j = i + 1; j < nodePositions.length; j++) {
+            const [x1, y1] = nodePositions[i], [x2, y2] = nodePositions[j];
+            const d = Math.hypot(x2 - x1, y2 - y1);
+            if (d < 110) {
+              pCtx.beginPath();
+              pCtx.moveTo(x1, y1); pCtx.lineTo(x2, y2);
+              pCtx.stroke();
+            }
+          }
+        }
+      }
+      requestAnimationFrame(drawParticles);
+    }
+    requestAnimationFrame(drawParticles);
+
+    /* ============================================================
+       8. ARCHITECTURE — PINNED HORIZONTAL FLOW
+       ============================================================ */
+    const archSection = document.querySelector(".arch-section");
+    const archNodes = document.getElementById("arch-nodes");
+
+    ScrollTrigger.create({
+      trigger: archSection,
+      start: "top top",
+      end: () => "+=" + (archNodes.scrollWidth - window.innerWidth + window.innerWidth * 0.6),
+      pin: ".arch-pin",
+      scrub: 0.7,
+      onUpdate: (self) => {
+        const maxShift = Math.max(0, archNodes.scrollWidth - (window.innerWidth * 0.82));
+        archNodes.style.transform = `translateX(${-self.progress * maxShift}px)`;
+      }
+    });
+
+    gsap.utils.toArray(".arch-node").forEach((node, i) => {
+      gsap.fromTo(node, { opacity: 0.25 }, {
+        opacity: 1, duration: 0.6,
+        scrollTrigger: { trigger: archSection, start: "top top", end: "bottom bottom", scrub: true }
+      });
+    });
+
+    /* ============================================================
+       9. SCHEMA GRID — populate with the REAL 14 tables
+       ============================================================ */
+    const DIMENSIONS = [
+      "dim_regions", "dim_categories", "dim_skus",
+      "dim_customer_addresses", "dim_customers",
+      "dim_warehouses", "dim_payment_methods"
+    ];
+    const FACTS = [
+      "fact_order_headers", "fact_order_lines", "fact_payments",
+      "fact_shipments", "fact_returns",
+      "fact_inventory_transactions", "fact_user_clickstream"
+    ];
+    const schemaGrid = document.getElementById("schema-grid");
+    function schemaCard(name, type) {
+      const el = document.createElement("div");
+      el.className = `schema-card glass ${type} reveal`;
+      el.innerHTML = `<div class="type">${type === "dim" ? "Dimension" : "Fact"}</div><div class="name">${name}</div>`;
+      return el;
+    }
+    DIMENSIONS.forEach((n) => schemaGrid.appendChild(schemaCard(n, "dim")));
+    FACTS.forEach((n) => schemaGrid.appendChild(schemaCard(n, "fact")));
+
+    gsap.to("#schema-grid .schema-card", {
+      opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.03,
+      scrollTrigger: { trigger: "#schema-grid", start: "top 85%" }
+    });
+    document.querySelectorAll(".schema-card").forEach((card) => {
+      card.addEventListener("pointerenter", () => gsap.to(card, { scale: 1.035, duration: 0.25 }));
+      card.addEventListener("pointerleave", () => gsap.to(card, { scale: 1, duration: 0.3 }));
+    });
+
+    /* ============================================================
+       10. HERO — THREE.JS FLOATING "DATA NODE" OBJECT
+       (stands in for React Three Fiber: same engine, no React
+       build pipeline available in a static single-file page)
+       ============================================================ */
+    const heroCanvas = document.getElementById("hero-canvas");
+    let renderer, scene, camera, wireObj, pointCloud;
+    let heroReady = false;
+
+    function initHero() {
+      const width = heroCanvas.clientWidth || window.innerWidth * 0.6;
+      const height = heroCanvas.clientHeight || window.innerHeight;
+
+      renderer = new THREE.WebGLRenderer({ canvas: heroCanvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(width, height);
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.set(0, 0, 7);
+
+      const geo = new THREE.IcosahedronGeometry(2.1, 1);
+      const wireMat = new THREE.MeshBasicMaterial({ color: 0x4fd8e8, wireframe: true, transparent: true, opacity: 0.55 });
+      wireObj = new THREE.Mesh(geo, wireMat);
+      scene.add(wireObj);
+
+      // point cloud on the same vertices — "unified nodes"
+      const ptsMat = new THREE.PointsMaterial({ color: 0x8b7cf6, size: 0.055, transparent: true, opacity: 0.9 });
+      pointCloud = new THREE.Points(geo, ptsMat);
+      pointCloud.scale.setScalar(1.02);
+      scene.add(pointCloud);
+
+      const innerGeo = new THREE.IcosahedronGeometry(1.15, 0);
+      const innerMat = new THREE.MeshBasicMaterial({ color: 0xf5a623, wireframe: true, transparent: true, opacity: 0.35 });
+      const innerObj = new THREE.Mesh(innerGeo, innerMat);
+      scene.add(innerObj);
+
+      let targetRotX = 0, targetRotY = 0;
+      window.addEventListener("pointermove", (e) => {
+        targetRotX = (e.clientY / window.innerHeight - 0.5) * 0.4;
+        targetRotY = (e.clientX / window.innerWidth - 0.5) * 0.6;
+      });
+
+      function animateHero() {
+        wireObj.rotation.y += 0.0022;
+        wireObj.rotation.x += 0.0009;
+        pointCloud.rotation.y += 0.0022;
+        pointCloud.rotation.x += 0.0009;
+        innerObj.rotation.y -= 0.0032;
+        innerObj.rotation.x -= 0.0014;
+
+        camera.position.x += (targetRotY * 1.4 - camera.position.x) * 0.03;
+        camera.position.y += (-targetRotX * 1.4 - camera.position.y) * 0.03;
+        camera.lookAt(0, 0, 0);
+
+        renderer.render(scene, camera);
+        requestAnimationFrame(animateHero);
+      }
+      animateHero();
+      heroReady = true;
+    }
+
+    if (!prefersReduced) {
+      try { initHero(); gsap.to(heroCanvas, { opacity: 1, duration: 1.4, delay: 0.4 }); }
+      catch (e) { console.warn("Hero WebGL init skipped:", e); }
+
+      window.addEventListener("resize", () => {
+        if (!heroReady) return;
+        const width = heroCanvas.clientWidth, height = heroCanvas.clientHeight;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      });
+    }
+
+    /* ============================================================
+       11. LOTTIE — inline, hand-authored "sync pulse" animation
+       (self-contained JSON: no third-party asset URL dependency)
+       ============================================================ */
+    const syncLottieData = {
+      v: "5.9.0", fr: 30, ip: 0, op: 60, w: 100, h: 100, nm: "sync",
+      layers: [
+        {
+          ty: 4, nm: "ring", ip: 0, op: 60, st: 0,
+          ks: {
+            o: { a: 1, k: [{ t: 0, s: [100] }, { t: 30, s: [30] }, { t: 60, s: [100] }] },
+            s: { a: 1, k: [{ t: 0, s: [70, 70] }, { t: 30, s: [110, 110] }, { t: 60, s: [70, 70] }] },
+            p: { a: 0, k: [50, 50, 0] },
+            r: { a: 0, k: 0 }
+          },
+          shapes: [{
+            ty: "gr", it: [
+              { ty: "el", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [46, 46] } },
+              { ty: "st", c: { a: 0, k: [0.31, 0.85, 0.91, 1] }, w: { a: 0, k: 4 }, lc: 2, lj: 2 },
+              { ty: "tr", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } }
+            ]
+          }]
+        },
+        {
+          ty: 4, nm: "core", ip: 0, op: 60, st: 0,
+          ks: {
+            o: { a: 0, k: 100 },
+            s: { a: 0, k: [100, 100] },
+            p: { a: 0, k: [50, 50, 0] },
+            r: { a: 0, k: 0 }
+          },
+          shapes: [{
+            ty: "gr", it: [
+              { ty: "el", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [14, 14] } },
+              { ty: "fl", c: { a: 0, k: [0.31, 0.85, 0.91, 1] } },
+              { ty: "tr", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } }
+            ]
+          }]
+        }
+      ]
+    };
+
+    if (window.lottie) {
+      lottie.loadAnimation({
+        container: document.getElementById("lottie-sync"),
+        renderer: "svg", loop: true, autoplay: true,
+        animationData: syncLottieData
+      });
+    }
+
+  </script>
+</body>
+
+</html>
