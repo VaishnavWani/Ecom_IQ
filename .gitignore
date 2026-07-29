@@ -1,0 +1,45 @@
+# ── Environment / Secrets ─────────────────────────────────────
+.env
+**/.env
+!.env.example
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+*.pyc
+
+# ── Spark / Hadoop ────────────────────────────────────────────
+derby.log
+metastore_db/
+spark-warehouse/
+
+# ── IDE / OS ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Docker ────────────────────────────────────────────────────
+# Keep docker-compose.yml but never commit override files with secrets
+docker-compose.override.yml
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Reference PDFs (large binary files) ──────────────────────
+Reference Pdfs and Images/
+PdfBuildScripts/__pycache__/

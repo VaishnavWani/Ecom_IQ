@@ -1,0 +1,78 @@
+1. Open your terminal inside the Ecom_iq folder.
+
+2. Start the Infrastructure (Kafka & Zookeeper)
+
+docker compose up -d
+(Wait about 15 seconds for Kafka to fully wake up).
+
+3. Install the Python Requirements
+
+pip install -r data_service/requirements.txt
+4. Start the Data Stream
+
+Bash
+python data_service/main.py
+
+Open a new terminal window from window menu and paste following command to see live data generation on the "topic_fact_order_headers" topic.
+
+docker exec -it ecom_iq_kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic topic_fact_order_headers --from-beginning
+
+When to use which variant:
+Full fresh start (wipe everything, rebuild code):
+
+powershell
+docker compose down -v --remove-orphans; docker compose up -d --build
+Just restart (keep DB data, no rebuild):
+
+powershell
+docker compose down --remove-orphans; docker compose up -d
+Restart + pick up code changes (keep DB data):
+
+powershell
+docker compose down --remove-orphans; docker compose up -d --build
+
+test api link
+http://127.0.0.1:8000/orders
+
+Docker attached it to the default bridge network only — not to ecom_iq_network. So containers in ecom_iq_network couldn't resolve the hostname ecommerce_iq_db.
+
+The fix:
+
+powershell
+docker network connect ecom_iq_network ecommerce_iq_db
+This joins the existing container to the compose network so all other services can find it by name. No restart needed.
+
+💡 Tip for next time: To avoid this, add --network ecom_iq_network to your docker run command upfront:
+
+powershell
+docker run -d --name ecommerce_iq_db --network ecom_iq_network -e POSTGRES_PASSWORD="bibtya1000" -p 5431:5432 postgres:latest
+
+Done ✅ — new endpoint is live. Here's how to use it:
+
+Truncate all tables:
+
+DELETE http://localhost:8000/truncate-all
+
+# 1. CREATE DOCKER NETWORK
+docker network create ecom_iq_network
+
+# 2. MAKE A FRESH CONTAINER (STANDALONE)
+docker run -d --name ecommerce_iq_db -p 5431:5432 -e POSTGRES_PASSWORD=mysecretpassword postgres:latest
+
+# 3. MAKE A FRESH CONTAINER (ATTACHED TO ecom_iq_network)
+docker run -d --name ecommerce_iq_db --network ecom_iq_network -p 5431:5432 -e POSTGRES_PASSWORD=mysecretpassword postgres:latest
+
+# 4. CONNECT AN EXISTING RUNNING CONTAINER TO THE NETWORK
+docker network connect ecom_iq_network ecommerce_iq_db
+
+# 5. STOP IT
+docker stop ecommerce_iq_db
+
+# 6. START IT
+docker start ecommerce_iq_db
+
+# 7. REMOVE IT COMPLETELY
+docker rm -f ecommerce_iq_db
+
+# 8. REMOVE IT COMPLETELY WITH VOLUMES & ORPHANS
+docker rm -f -v ecommerce_iq_db; docker volume prune -f
