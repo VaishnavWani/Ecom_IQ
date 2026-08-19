@@ -430,6 +430,6 @@ Full write-up: [`ProblemStatement.md`](./ProblemStatement.md)
 
 <div align="center">
 
-Built by [**shubhamjoshi32**](https://github.com/shubhamjoshi32)
+Built by [**VaishnavWani**](https://github.com/VaishnavWani)
 
 </div>
